@@ -1,0 +1,17 @@
+-
+ name: "Another McCandidate"
+ term_start: 2003
+ term_end: 2004
+ occupation: state_assembly
+ district: "Somewhere in California"
+-
+ name: "Some Person"
+ term_start: 2016
+ term_end: 2017
+ occupation: state_assembly
+ district: "MagicTown"
+ state_assembly: "New York"
+-
+ name: "Person Four"
+ party: "Party"
+ website: "http://www.me.me"
