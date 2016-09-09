@@ -210,6 +210,7 @@ def make_candidate(noisy_data):
 
   try:
     name = normalize_name(data["name"])
+    data["name"] = name
     party = data["party"]
     office = data["office"]
   except KeyError:

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """Tests for candidate.py. Run them with py.test."""
 
+import re
 import unittest
 
 import candidate
@@ -55,6 +56,17 @@ class TestCandidate(unittest.TestCase):
       ({"can_nam": "Some Person", "party": "DEM", "can_off_sta": "NM"},
       None,
       ),
+      # Differently formatted name
+      ({"can_nam": "PERSON, SOME", "office": "house", "party": "DEM",
+        "can_off_sta": "NM"},
+       {"name": "Some Person", "office": "house", "party": "DEM", "state": "NM"}
+      ),
+      # Invalid fields are retained (though not used).
+      ({"can_nam": "PERSON, SOME", "office": "house", "party": "DEM",
+        "icecream_flavor": "banana"},
+       {"name": "Some Person", "office": "house", "party": "DEM",
+       "icecream_flavor": "banana"}
+      ),
       ]
     for k in cases:
       got = candidate.make_candidate(k[0])
@@ -62,6 +74,20 @@ class TestCandidate(unittest.TestCase):
         self.assertEqual(k[1], got.data())
       else:
         self.assertEqual(k[1], None)
+
+  def test_content(self):
+    """Test wikipedia output."""
+    data = {"can_nam": "Some Person", "office": "house", "party": "DEM",
+            "can_off_sta": "NM", "can_off_dis": "7"}
+
+    got = candidate.make_candidate(data).wikipedia_content()
+    # fields could come out in any order, so we can't do a full match;
+    # we just check that something plausible came out.
+    expected_re = re.compile(
+        "^{{Infobox Officeholder\n.*| name = Some Person\n.*}}$")
+    match = expected_re.search(got)
+
+    self.assertTrue(match)
 
 
 if __name__ == 'main__':
