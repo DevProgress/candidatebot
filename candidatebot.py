@@ -10,9 +10,11 @@ import sys
 import candidate
 
 USERNAME = "candidatebot"
-#BASEURL = "http://test.wikipedia.org/w/"
+#BASEURL = "https://test.wikipedia.org/w/"
+#BASEURL = "https://en.wikipedia.org/w/"
 BASEURL = "http://cso.noidea.dog/w/"
 YAML_FILE = "candidates.yaml"
+XML_FILE = "CandidateSummaryAction.xml"
 
 # TODO: Set a user agent.
 
@@ -89,19 +91,19 @@ def does_page_exist(page_to_query):
     print "Couldn't parse JSON:", ex
 
 
-def create_page(page_to_edit, content_to_write, login_cookies):
+def create_page(person, login_cookies):
   """Create a page if it doesn't exist. If it already exists, just silently
      does nothing.
 
    Args:
-    page_to_edit: (str) Usually the candidate's name.
-    content_to_write: (str) What to write to the new page, in wikipedia format.
+    person: (Candidate) data about one candidate
     login_cookies: (requests.cookies.RequestsCookieJar) Cookies from when we
       authenticated with the wiki.
 
    Returns:
     (bool) Did this work without errors?
   """
+  page_to_edit = person.name()
   if does_page_exist(page_to_edit):
     return True
 
@@ -122,7 +124,9 @@ def create_page(page_to_edit, content_to_write, login_cookies):
   edit_cookie = login_cookies.copy()
   edit_cookie.update(req.cookies)
 
-  print "Creating wikipedia page for %s" % page_to_edit
+  print "Creating wikipedia page for %s (%s)" % (page_to_edit, person.office())
+  content_to_write = person.wikipedia_content()
+
   payload = {'action': 'edit', 'assert': 'user', 'format': 'json', 'utf8': '',
              'text': content_to_write, 'summary': 'candidatebot did this',
              'title': page_to_edit, 'token': edit_token, 'createonly': True}
@@ -137,12 +141,14 @@ def create_page(page_to_edit, content_to_write, login_cookies):
 
 def main():
   """Gets a bunch of candidate information and tries to create pages for it."""
+
   password = getpass.getpass("Password for wikipedia account %s: " % USERNAME)
   login_cookies = get_login_cookies(USERNAME, password)
   if not login_cookies:
     sys.exit(1)
 
-  for person in candidate.new_from_yaml(YAML_FILE):
-    create_page(person.name(), person.wikipedia_content(), login_cookies)
+  #for person in candidate.new_from_yaml(YAML_FILE):
+  for person in candidate.new_from_fec_xml(XML_FILE):
+    create_page(person, login_cookies)
 
 main()
