@@ -1,6 +1,10 @@
+"""Information about a candidate, including what fields are valid for
+Wikipedia's Officeholder onebox.
+"""
+
 import yaml
 
-def CheckField(field):
+def check_field(field):
   """Checks if a field is valid.
 
   Args:
@@ -51,17 +55,16 @@ def CheckField(field):
 def new_from_yaml(filename):
   """ Read a yaml file, yield Candidates.
 
-  Args: 
+  Args:
     filename (string): a file with one or more candidates
   Yields:
     Candidates
   """
-  candidates = []
   with open(filename) as stream:
     try:
       contents = yaml.load(stream)
-    except yaml.YAMLError as e:
-      print e
+    except yaml.YAMLError as ex:
+      print ex
 
   for element in contents:
     if not element["name"]:
@@ -72,8 +75,8 @@ def new_from_yaml(filename):
 
     yield candidate
 
-"""Name and a bunch of key/value pairs for a single candidate."""
-class Candidate:
+class Candidate(object):
+  """Name and a bunch of key/value pairs for a single candidate."""
   def __init__(self, name, stuff):
     self._name = name
     self._data = stuff
@@ -82,8 +85,8 @@ class Candidate:
     """Create a wikipedia-formatted string of candidate information."""
     infostr = "{{Infobox Officeholder\n"
     for k in self._data:
-      if not CheckField(k):
-        print("%s: %s is not a valid field. Skipping." % (self._name, k))
+      if not check_field(k):
+        print "%s: %s is not a valid field. Skipping." % (self._name, k)
         continue
       infostr += "| %s = %s\n" % (k, self._data[k])
 
@@ -92,5 +95,6 @@ class Candidate:
     return infostr
 
   def name(self):
+    """Return the candidate's name."""
     return self._name
 
