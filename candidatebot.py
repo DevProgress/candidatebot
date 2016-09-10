@@ -15,6 +15,8 @@ USERNAME = "candidatebot"
 BASEURL = "http://cso.noidea.dog/w/"
 YAML_FILE = "candidates.yaml"
 XML_FILE = "CandidateSummaryAction.xml"
+# Limit what this does during testing.
+MAX_PAGES_TO_CREATE = 3
 
 # TODO: Set a user agent.
 
@@ -23,7 +25,7 @@ def get_login_cookies(username, password):
 
   Args:
     username: (str)
-    password: (stra
+    password: (str)
   Returns:
     (requests.cookies.RequestsCookieJar): delicious cookies
   """
@@ -104,8 +106,6 @@ def create_page(person, login_cookies):
     (bool) Did this work without errors?
   """
   page_to_edit = person.name()
-  if does_page_exist(page_to_edit):
-    return True
 
   params = '?format=json&action=query&meta=tokens&continue='
   req = requests.get(BASEURL + 'api.php' + params, cookies=login_cookies)
@@ -147,8 +147,14 @@ def main():
   if not login_cookies:
     sys.exit(1)
 
+  created = 0
   #for person in candidate.new_from_yaml(YAML_FILE):
   for person in candidate.new_from_fec_xml(XML_FILE):
-    create_page(person, login_cookies)
+    if created >= MAX_PAGES_TO_CREATE:
+      break
+    if not does_page_exist(person.name()):
+      success = create_page(person, login_cookies)
+      if success:
+        created += 1
 
 main()
