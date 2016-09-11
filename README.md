@@ -11,11 +11,15 @@ It uses the existing Officeholder infobox:
 https://en.wikipedia.org/wiki/Template:Infobox_officeholder
 
 # Prerequisites
+
+If you are running on a mac, make sure you have xcode command-line tools installed. You can install them using the command 'xcode-select --install'
+
 A couple of python modules:
 
 ```
 pip install pyyaml
 pip install requests
+pip install lxml
 ```
 
 and for testing, you need `python-pytest`. (http://doc.pytest.org)
