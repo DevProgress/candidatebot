@@ -6,6 +6,7 @@ they each have a wikipedia page, creating it if necessary"""
 import getpass
 import requests
 import sys
+import time
 
 import candidate
 import credentials
@@ -17,8 +18,43 @@ YAML_FILE = "candidates.yaml"
 XML_FILE = "CandidateSummaryAction.xml"
 # Limit what this does during testing.
 MAX_PAGES_TO_CREATE = 3
+# Rate-limit to five page-creations every second. Change to 0.1 before running
+# against Wikipedia, but it's fine to hammer cso.noidea.dog.
+EDIT_PAGES_PER_SECOND = 4
+QUERY_PAGES_PER_SECOND = 20
 
 # TODO: Set a user agent.
+
+def rate_limited(max_per_second):
+  """Rate limiting decorator-with-args.
+  Args:
+    max_per_second: (float) How many times per second to do the thing.
+  Returns:
+    (func): A decorator
+  """
+  interval = 1.0 / float(max_per_second)
+
+  def decorator(func):
+    """A rate-limiting decorator.
+
+    Args:
+      func: (func) The thing to wrap.
+    Returns:
+      (func): The rate-limting function to apply to the thing to wrap.
+    """
+    last_called = [0.0]
+
+    def rate_limited_function(*args, **kwargs):
+      """The actual rate limiting logic."""
+      elapsed = time.time() - last_called[0]
+      wait = interval - elapsed
+      if wait > 0:
+        time.sleep(wait)
+      ret = func(*args, **kwargs)
+      last_called[0] = time.time()
+      return ret
+    return rate_limited_function
+  return decorator
 
 def get_login_cookies(username, password):
   """Return login cookies.
@@ -65,6 +101,7 @@ def get_login_cookies(username, password):
 
   return req2.cookies
 
+@rate_limited(QUERY_PAGES_PER_SECOND)
 def does_page_exist(page_to_query):
   """Checks whether a page already exists.
 
@@ -92,7 +129,7 @@ def does_page_exist(page_to_query):
   except ValueError, ex:
     print "Couldn't parse JSON:", ex
 
-
+@rate_limited(EDIT_PAGES_PER_SECOND)
 def create_page(person, login_cookies):
   """Create a page if it doesn't exist. If it already exists, just silently
      does nothing.
