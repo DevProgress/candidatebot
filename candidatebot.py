@@ -8,8 +8,8 @@ import requests
 import sys
 
 import candidate
+import credentials
 
-USERNAME = "candidatebot"
 #BASEURL = "https://test.wikipedia.org/w/"
 #BASEURL = "https://en.wikipedia.org/w/"
 BASEURL = "http://cso.noidea.dog/w/"
@@ -141,9 +141,13 @@ def create_page(person, login_cookies):
 
 def main():
   """Gets a bunch of candidate information and tries to create pages for it."""
-
-  password = getpass.getpass("Password for wikipedia account %s: " % USERNAME)
-  login_cookies = get_login_cookies(USERNAME, password)
+  if not credentials.USERNAME:
+    print "Please specify a user name in the variable USERNAME in a credentials.py file in the root directory"
+  if not credentials.PASS:
+    password = getpass.getpass("Password for wikipedia account %s: " % USERNAME)
+  else:
+    password = credentials.PASS
+  login_cookies = get_login_cookies(credentials.USERNAME, password)
   if not login_cookies:
     sys.exit(1)
 
