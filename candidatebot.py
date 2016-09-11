@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2.7
 
 """This script reads a list of candidates from a YAML file and makes sure that
 they each have a wikipedia page, creating it if necessary"""
