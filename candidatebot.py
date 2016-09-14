@@ -16,8 +16,9 @@ import credentials
 BASEURL = "http://cso.noidea.dog/w/"
 YAML_FILE = "candidates.yaml"
 XML_FILE = "CandidateSummaryAction.xml"
+HOUSE_FILE = "house.html"
 # Limit what this does during testing.
-MAX_PAGES_TO_CREATE = 3
+MAX_PAGES_TO_CREATE = 2
 # Rate-limit to five page-creations every second. Change to 0.1 before running
 # against Wikipedia, but it's fine to hammer cso.noidea.dog.
 EDIT_PAGES_PER_SECOND = 4
@@ -161,7 +162,8 @@ def create_page(person, login_cookies):
   edit_cookie = login_cookies.copy()
   edit_cookie.update(req.cookies)
 
-  print "Creating wikipedia page for %s (%s)" % (page_to_edit, person.office())
+  print "Creating wikipedia page for %s (for %s)" % (
+      page_to_edit, person.office_and_district())
   content_to_write = person.wikipedia_content()
 
   payload = {'action': 'edit', 'assert': 'user', 'format': 'json', 'utf8': '',
@@ -181,7 +183,7 @@ def main():
   if not credentials.USERNAME:
     print "Please specify a user name in the variable USERNAME in a credentials.py file in the root directory"
   if not credentials.PASS:
-    password = getpass.getpass("Password for wikipedia account %s: " % USERNAME)
+    password = getpass.getpass("Password for wikipedia account %s: " % credentials.USERNAME)
   else:
     password = credentials.PASS
   login_cookies = get_login_cookies(credentials.USERNAME, password)
@@ -189,9 +191,14 @@ def main():
     sys.exit(1)
 
   created = 0
+
+  #for person in candidate.new_from_fec_xml(XML_FILE):
   #for person in candidate.new_from_yaml(YAML_FILE):
-  for person in candidate.new_from_fec_xml(XML_FILE):
+  for person in candidate.new_from_wikipedia_page(HOUSE_FILE):
+    print "Person: %s, %s" % (person.name(), person.office_and_district())
+    success = False
     if created >= MAX_PAGES_TO_CREATE:
+      print "Already created %s pages. Stopping." % MAX_PAGES_TO_CREATE
       break
     if not does_page_exist(person.name()):
       success = create_page(person, login_cookies)
