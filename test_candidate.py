@@ -81,31 +81,33 @@ class TestCandidate(unittest.TestCase):
       except candidate.CandidateException:
         pass
 
-  def test_district(self):
-    """Test district munging."""
+  def test_location(self):
+    """Test district and state munging."""
     cases = [
-      ["California 1", "California", "1st"],
-      ["New York 2", "New York", "2nd"],
-      ["New Mexico 3", "New Mexico", "3rd"],
-      ["Florida 18", "Florida", "18th"],
-      ["Wyoming at-large", "Wyoming", "at-large"],
+      # input_state, input_district, expected_state, expected_district
+      ["", "California 1", "California", "1st"],
+      ["", "New York 2", "New York", "2nd"],
+      ["", "New Mexico 3", "New Mexico", "3rd"],
+      ["", "Florida 18", "Florida", "18th"],
+      ["", "Wyoming at-large", "Wyoming", "at-large"],
+      ["FL", "4", "Florida", "4th"],
+      ["NM", "New Mexico 1", "New Mexico", "1st"],
+      ["Washington", "", "Washington", ""],
+      ["Iowa", "Iowa 1", "Iowa", "1st"],
+      # a valid state in the district name takes precedence
+      ["NJ", "New York 2", "New York", "2nd"],
+      # and an invalid state in the district returns empty
+      ["NJ", "New Spork 2", "", "2nd"],  # error
+      ["", "New Spork 2", "", "2nd"],    # error
+      ["Iowa", "not real", "Iowa", ""],  # error
+      ["", "", "", ""],                  # error
+      ["Alberta", "", "", ""],           # error
+      ("XX", "Hawaii at-large", "Hawaii", "at-large"),
     ]
     for k in cases:
-      got = candidate.normalize_district(k[0])
-      expected = (k[1], k[2])
+      got = candidate.normalize_location(k[0], k[1])
+      expected = (k[2], k[3])
       self.assertEqual(got, expected)
-
-  def test_state(self):
-    """Test state translation."""
-    cases = [
-      ("CA", "California"),
-      ("NM", "New Mexico"),
-      (None, None),
-      ("South Carolina", "South Carolina"),
-      ("XX", "XX"),
-    ]
-    for k in cases:
-      self.assertEqual(candidate.normalize_state(k[0]), k[1])
 
 
   def test_content(self):
@@ -125,6 +127,9 @@ class TestCandidate(unittest.TestCase):
 
   def test_wikipedia_html(self):
     """Test parsing wikipedia html.
+
+    Reads a test html file, test_house.html, in this directory and checks
+    for expected results.
     """
 
     filename = "test_house.html"

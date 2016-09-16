@@ -140,16 +140,26 @@ def normalize_name(name):
     normalized += " %s" % suffix
   return normalized
 
-def normalize_district(district):
-  """Translate a district into an ordinal and state.
+def normalize_location(state, district):
+  """Translate districts and state abbreviations into a district and state.
+
+  Depending on the data source, the state name might be part of the district
+  arg or abbreviated in the state arg. Calls are expected to look like:
+    normalize_location("", "Alabama 1") or
+    normalize_location("CA", "3") or
+    normalize_location("FL", "")
+
   Args:
-    district: (str) a string like "Alabama 1" or "14"
+    state: (str) a state name or abbreviation or the empty string
+    district: (str) a string like "Alabama 1" or "14" or the empty string.
   returns:
     (str, str): a state and ordinal district, e.g., ("Alabama", "1st")
   """
-  if not district:
-    return (None, None)
-  state = None
+  number = ""
+  suffix = ""
+  unverified_state = state
+
+  # District first
   match = re.search(r"^(\d+)$", district)
   if match is not None:
     # The district is just a number
@@ -158,44 +168,33 @@ def normalize_district(district):
     # Let's see if it's a state and a number
     district_re = r"^(.*)\W+(\d+|at-large)$"
     match = re.search(district_re, district)
-    number = ""
-    state = ""
     if match is not None:
-      state = match.group(1)
+      unverified_state = match.group(1)
       number = match.group(2)
+
+  if number:
+    if number == "at-large":
+      suffix = ""
+    elif re.match("^1.$", number):
+      suffix = "th"
+    elif number[-1] == "1":
+      suffix = "st"
+    elif number[-1] == "2":
+      suffix = "nd"
+    elif number[-1] == "3":
+      suffix = "rd"
     else:
-      print "Error: [%s] didn't match [%s]" % (district_re, district)
-      return (None, None)
+      suffix = "th"
 
-  if number == "at-large":
-    suffix = ""
-  elif re.match("^1.$", number):
-    suffix = "th"
-  elif number[-1] == "1":
-    suffix = "st"
-  elif number[-1] == "2":
-    suffix = "nd"
-  elif number[-1] == "3":
-    suffix = "rd"
-  else:
-    suffix = "th"
-  return (state, number + suffix)
+  normalized_district = number + suffix
 
-def normalize_state(state):
-  """Translate a two letter state name into a full state name
-  Args:
-    state: (str) a string like "CA" or "California"
-  returns:
-    (str): a state name like "California"
-  """
-  if not state:
-    return None
-  if len(state) != 2:
-    return state
-  full = us.states.lookup(state)
+  # Check it's a valid state.
+  normalized_state = ""
+  full = us.states.lookup(unicode(unverified_state))
   if full:
-    return full.name
-  return state
+    normalized_state = full.name
+
+  return (normalized_state, normalized_district)
 
 def new_from_yaml(filename):
   """ Read a yaml file, yield Candidates.
@@ -377,27 +376,27 @@ def make_candidate(noisy_data):
   except KeyError, ex:
     raise CandidateException("missing expected fields: %s" % ex)
 
+  if "district" in data:
+    district = data["district"]
+  else:
+    district = ""
+  if "state" in data:
+    state = data["state"]
+  else:
+    state = ""
 
-  if office == "house":
-    try:
-      district = data["district"]
-    except KeyError:
-      raise CandidateException("missing expected field: district")
+  state, district = normalize_location(state, district)
 
-    state, ordinal = normalize_district(district)
-    if state:
-      data['state'] = state
-
-    if ordinal:
-      data['district'] = ordinal
-    else:
-      raise CandidateException("couldn't parse district: %s")
-
-  try:
-    state = normalize_state(data["state"])
-    data["state"] = state
-  except KeyError:
+  if not state:
     raise CandidateException("missing expected field: state")
+  else:
+    data['state'] = state
+
+  if not district:
+    if office == "house":
+      raise CandidateException("missing expected field: district")
+  else:
+    data["district"] = district
 
   return Candidate(name, data)
 
