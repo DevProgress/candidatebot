@@ -417,8 +417,32 @@ class Candidate(object):
       infostr += "| %s = %s\n" % (k, self._data[k])
 
     infostr += ("\n}}\n'''%s''' is a 2016 Democratic candidate seeking "
-                "election to the %s.\n {{US-politician-stub}}" % (
+                "election to the %s.\n" % (
                 self.name(), self.office_and_district()))
+
+    infostr += ("\n\n"
+                "== Biography ==\n"
+                "TODO: Replace this text with some biographical information."
+                "<ref>TODO: Add a URL in here that confirms the bio.</ref>"
+                "\n\n"
+                "==  Political positions ==\n"
+                "TODO: Replace this text with some information about the "
+                "candidate's political positions"
+                "<ref>TODO: Add a URL in here that confirms them.</ref>"
+                "\n\n"
+                "== External links ==\n"
+                "* [ADD_URL_HERE / %s for %s]") % (self.name(), self.office())
+
+    infostr += "\n\n{{US-politician-stub}}\n\n"
+
+    infostr += ("==References==\n{{reflist|30em}}")
+
+    try:
+      state = self._data["state"]
+      infostr += ("\n[[Category:%s Democrats]] "
+                  "\n[[Category:%s Politicians]]\n" % (state, state))
+    except KeyError:
+      pass
 
     reference = self.reference()
     if reference:
@@ -453,6 +477,18 @@ class Candidate(object):
       return "the US Senate for %s" % state
     else:
       return office
+
+  def office(self):
+    """Return the office the candidate is running for."""
+    try:
+      office = self._data["office"]
+      if office == "house":
+        return "Congress"
+      if office == "senate":
+        return "Senate"
+      return office
+    except KeyError:
+      return "Office"
 
   def data(self):
     """Return all of the candidate's data. For testing."""
