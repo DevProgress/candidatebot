@@ -14,10 +14,13 @@ import credentials
 #BASEURL = "https://test.wikipedia.org/w/"
 #BASEURL = "https://en.wikipedia.org/w/"
 BASEURL = "http://cso.noidea.dog/w/"
+# Prepend all created pages with this
+DRAFT_PREFIX = "User:Candidatebot/sandbox/"
 YAML_FILE = "candidates.yaml"
 XML_FILE = "CandidateSummaryAction.xml"
+HOUSE_FILE = "house.html"
 # Limit what this does during testing.
-MAX_PAGES_TO_CREATE = 3
+MAX_PAGES_TO_CREATE = 2
 # Rate-limit to five page-creations every second. Change to 0.1 before running
 # against Wikipedia, but it's fine to hammer cso.noidea.dog.
 EDIT_PAGES_PER_SECOND = 4
@@ -101,6 +104,7 @@ def get_login_cookies(username, password):
 
   return req2.cookies
 
+
 @rate_limited(QUERY_PAGES_PER_SECOND)
 def does_page_exist(page_to_query):
   """Checks whether a page already exists.
@@ -110,7 +114,7 @@ def does_page_exist(page_to_query):
     login_cookies: (requests.cookies.RequestsCookieJar) Cookies from when we
       authenticated with the wiki.
   Returns:
-    (bool) whether the page exists.
+    (str) the page url if it exists; None otherwise.
   """
   params = ('?format=json&action=query&titles=%s&prop=info&inprop=url' %
             page_to_query)
@@ -123,11 +127,22 @@ def does_page_exist(page_to_query):
     pages = req.json()['query']['pages']
     for k in pages: # though there should only be one
       if k != "-1":  # we have a live page!
-        print "%s already has a page at %s" % (
-            page_to_query, pages[k]['fullurl'])
-        return True
+        return pages[k]['fullurl']
   except ValueError, ex:
     print "Couldn't parse JSON:", ex
+
+def does_draft_exist(page_to_query):
+  """Checks whether a draft page exists.
+
+  Args:
+    page_to_query: (string) What to look up.
+    login_cookies: (requests.cookies.RequestsCookieJar) Cookies from when we
+      authenticated with the wiki.
+  Returns:
+    (str) the page url if it exists; None otherwise.
+  """
+  draft_to_query = "%s%s" % (DRAFT_PREFIX, page_to_query)
+  return does_page_exist(draft_to_query)
 
 @rate_limited(EDIT_PAGES_PER_SECOND)
 def create_page(person, login_cookies):
@@ -140,9 +155,9 @@ def create_page(person, login_cookies):
       authenticated with the wiki.
 
    Returns:
-    (bool) Did this work without errors?
+    (str) Url of created page or None if unsuccessful
   """
-  page_to_edit = person.name()
+  page_to_edit = "%s%s" % (DRAFT_PREFIX, person.name())
 
   params = '?format=json&action=query&meta=tokens&continue='
   req = requests.get(BASEURL + 'api.php' + params, cookies=login_cookies)
@@ -150,18 +165,19 @@ def create_page(person, login_cookies):
   if req.status_code != 200:
     print "Got status code %s from %s: %s"% (
         req.status_code, req.url, req.reason)
-    return False
+    return None
 
   try:
     edit_token = req.json()['query']['tokens']['csrftoken']
   except ValueError, ex:
     print "Couldn't parse edit token from JSON:", ex
-    return False
+    return None
 
   edit_cookie = login_cookies.copy()
   edit_cookie.update(req.cookies)
 
-  print "Creating wikipedia page for %s (%s)" % (page_to_edit, person.office())
+  print "Creating wikipedia page for %s (for %s)" % (
+      page_to_edit, person.office_and_district())
   content_to_write = person.wikipedia_content()
 
   payload = {'action': 'edit', 'assert': 'user', 'format': 'json', 'utf8': '',
@@ -172,16 +188,26 @@ def create_page(person, login_cookies):
   if not req.ok:
     print "Got status code %s from %s: %s"% (
         req.status_code, req.url, req.reason)
-    return False
-  return True
+    return None
 
+  created_page = does_draft_exist(person.name())
+  if created_page:   # Add to the list of stubs we've created.
+    link = "[[User:Candidatebot/sandbox/%s]]<br>" % person.name()
+    list_page = "%s%s" % (DRAFT_PREFIX, "ListOfPages")
+
+    payload = {'action': 'edit', 'assert': 'user', 'format': 'json', 'utf8': '',
+               'appendtext': link, 'summary': 'candidatebot did this',
+               'title': list_page, 'token': edit_token}
+    req = requests.post(BASEURL + 'api.php', data=payload, cookies=edit_cookie)
+
+  return created_page
 
 def main():
   """Gets a bunch of candidate information and tries to create pages for it."""
   if not credentials.USERNAME:
     print "Please specify a user name in the variable USERNAME in a credentials.py file in the root directory"
   if not credentials.PASS:
-    password = getpass.getpass("Password for wikipedia account %s: " % USERNAME)
+    password = getpass.getpass("Password for wikipedia account %s: " % credentials.USERNAME)
   else:
     password = credentials.PASS
   login_cookies = get_login_cookies(credentials.USERNAME, password)
@@ -189,13 +215,29 @@ def main():
     sys.exit(1)
 
   created = 0
+
+  #for person in candidate.new_from_fec_xml(XML_FILE):
   #for person in candidate.new_from_yaml(YAML_FILE):
-  for person in candidate.new_from_fec_xml(XML_FILE):
+  for person in candidate.new_from_wikipedia_page(HOUSE_FILE):
+    print "Person: %s, %s" % (person.name(), person.office_and_district())
     if created >= MAX_PAGES_TO_CREATE:
+      print "Already created %s pages. Stopping." % MAX_PAGES_TO_CREATE
       break
-    if not does_page_exist(person.name()):
-      success = create_page(person, login_cookies)
-      if success:
-        created += 1
+    # Check if a live page exists.
+    existing_page = does_page_exist(person.name())
+    if existing_page:
+      print "Page already exists at %s" % existing_page
+    else:
+      # Check for an existing draft page.
+      existing_draft = does_draft_exist(person.name())
+      if existing_draft:
+        print "Draft already exists at %s" % existing_draft
+      else:
+        new_page = create_page(person, login_cookies)
+        if new_page:
+          print "Created %s" % new_page
+          created += 1
+        else:
+          print "Failed to create a page for %s" % person.name()
 
 main()
