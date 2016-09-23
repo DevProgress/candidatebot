@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2.7
 """Tests for candidate.py. Run them with py.test."""
 
 import re
