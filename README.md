@@ -24,6 +24,7 @@ pip install pyyaml
 pip install requests
 pip install lxml
 pip install beautifulsoup4
+pip install us
 ```
 
 and for testing, you need `python-pytest`. (http://doc.pytest.org)
