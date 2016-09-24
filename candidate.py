@@ -275,6 +275,14 @@ def new_from_wikipedia_page(filename):
   other_parties = ["Green", "Independent", "Libertarian", "NPP", "PDP", "PIP",
                    "PPT", "R", "Reform", "Republican", "No Party Preference"]
   soup = BeautifulSoup(html, 'html.parser')
+
+  citations = {}
+  for ref_lists in soup.findAll("ol", {"class": "references"}):
+    for ref in ref_lists.findAll("li"):
+      name = ref.get('id')
+      citation = ref.find("a", {"class": "external text"})
+      citations[name] = citation
+
   tables = soup.findAll("table", {"class": "wikitable sortable"})
 
   for table in tables:  # each state/territory
@@ -293,9 +301,8 @@ def new_from_wikipedia_page(filename):
         continue
       lines = candidates.text.split("\n")
       tags = candidates.findAll()
-
       page = ""
-      reference = ""
+
       for line in lines:
         # Skip empty lines.
         if len(line) == 0:
@@ -317,28 +324,52 @@ def new_from_wikipedia_page(filename):
         # wikipedia page. The line will look like
         # Firstname Lastname (Democrat)[reference]
         name = line.split("(")[0].strip()
-        #TODO: Parse the references and collect this url. We could also get
-        # this from the <sup> tag.
         reference = line.split(")")[1].strip()
+
         for i in range(0, len(tags)):
           if tags[i].name == 'a' and tags[i].text == name:
             page = tags[i]
         if page:  # The candidate already has a page. We're not needed here.
           continue
+
+        # Extract the citation. This is a bit involved.
+        # 1. We pull the reference number out from after the candidate name. It
+        # looks like:  [63]
+        # 2. We get the A record that matches that reference. It looks like:
+        #   <a href="#cite_note-68">[63]</a> The two numbers won't match, btw.
+        # 3. Strip the pound sign off the cite-note and look it up in the list
+        # of citations we created above. That gives us a name, like "Candidate
+        # Does A Thing, Says Newspaper!" and a url. We save them both for now,
+        # and combine them in a reference-ish way when we create the wiki page.
+        refs = candidates.findAll("a")
+        citation = None
+        for ref in refs:
+          if ref.text == reference:  # That's that '[63]' mentioned above.
+            href = ref.get('href')   # e.g., #cite_note-68
+            match = re.match("^#(.*)$", href)  # strip the leading '#'
+            if match is not None:
+              note = match.group(1)
+              if note in citations:
+                citation = citations[note]
+            break
+
+        data = {}
+        data["name"] = name
+        data["district"] = district
+        data["incumbent"] = incumbent
+        data["party"] = "Democratic"
+        data["office"] = "house"
+        if citation:
+          data["reference_name"] = citation.text
+          data["reference_url"] = citation.get('href')
         else:
-          data = {}
-          data["name"] = name
-          data["district"] = district
-          data["incumbent"] = incumbent
-          data["reference"] = reference
-          data["party"] = "Democratic"
-          data["office"] = "house"
-          try:
-            candidate = make_candidate(data)
-          except CandidateException, ex:
-            print "Skipping %s: %s" % (name, ex)
-            continue
-          yield candidate
+          print "No citation for %s" % name
+        try:
+          candidate = make_candidate(data)
+        except CandidateException, ex:
+          print "Skipping %s: %s" % (name, ex)
+          continue
+        yield candidate
 
 
 class CandidateException(Exception):
@@ -348,16 +379,12 @@ class CandidateException(Exception):
 def make_candidate(noisy_data):
   """Turn a dictionary of potentially noisy candidate data into a Candidate.
 
-  Only returns candidates who match a bunch of rules:
-    * has a name
-    * is listed as a democrat
-    * is running for a specific office
-    * isn't running for president
-
   Args:
     data: ({str:str, ...}) A dictionary of candidate data, indexed by type
   Returns:
     (Candidate): a populated Candidate object
+  Raises:
+    CandidateException: missing name, office, district or state
   """
   data = {}
 
@@ -417,9 +444,8 @@ class Candidate(object):
       infostr += "| %s = %s\n" % (k, self._data[k])
 
     infostr += ("\n}}\n'''%s''' is a 2016 Democratic candidate seeking "
-                "election to the %s.\n" % (
-                self.name(), self.office_and_district()))
-
+                "election to the %s. %s" % (
+               self.name(), self.office_and_district(), self.reference()))
     infostr += ("\n\n"
                 "== Biography ==\n"
                 "TODO: Replace this text with some biographical information."
@@ -435,7 +461,7 @@ class Candidate(object):
 
     infostr += "\n\n{{US-politician-stub}}\n\n"
 
-    infostr += ("==References==\n{{reflist|30em}}")
+    infostr += ("==References==\n{{reflist}}")
 
     try:
       state = self._data["state"]
@@ -443,10 +469,6 @@ class Candidate(object):
                   "\n[[Category:%s Politicians]]\n" % (state, state))
     except KeyError:
       pass
-
-    reference = self.reference()
-    if reference:
-      infostr += "<ref>%s</ref>" % reference
 
     return infostr
 
@@ -497,6 +519,9 @@ class Candidate(object):
   def reference(self):
     """Return wikipedia reference."""
     try:
-      return self._data["reference"]
+      name = self._data["reference_name"]
+      url = self._data["reference_url"]
+      # reference names are already enclosed in double quotes.
+      return '<ref name=%s>%s</ref>' % (name, url)
     except KeyError:
-      return None
+      return ""

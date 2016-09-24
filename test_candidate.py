@@ -142,7 +142,8 @@ class TestCandidate(unittest.TestCase):
       "state": u"Alabama",
       "district": u"2nd",
       "incumbent": u"Name Two",
-      "reference": u"[63]",
+      "reference_name": u'"Sen. Richard Shelby will face Republican challengers"',
+      "reference_url": u"http://www.montgomeryadvertiser.com/story/news/2015/11/07/sen-richard-shelby-face-republican-challengers/75318814",
       "office": "house",
       "party": "Democratic",
     }
@@ -151,7 +152,8 @@ class TestCandidate(unittest.TestCase):
       "state": u"Alaska",
       "district": u"at-large",
       "incumbent": u"Name Five",
-      "reference": u"[71]",
+      "reference_name": u'"Steve Lindbeck announces run for Congress against Don Young"',
+      "reference_url": u"http://www.adn.com/article/20160407/steve-lindbeck-announces-run-congress-against-don-young",
       "office": "house",
       "party": "Democratic",
     }
