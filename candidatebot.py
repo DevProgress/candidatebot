@@ -61,7 +61,7 @@ def main():
       continue
     print "Creating wikipedia page for %s (for %s)" % (
       person.name(), person.office_and_district())
-    new_page = wiki.create_page(person)
+    new_page = wiki.create_page(person, create_draft=True)
     if new_page:
       print "Created %s" % new_page
       created += 1
