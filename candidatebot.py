@@ -24,9 +24,12 @@ MAX_PAGES_TO_CREATE = 2
 def main():
   """Gets a bunch of candidate information and tries to create pages for it."""
   if not credentials.USERNAME:
-    print "Please specify a user name in the variable USERNAME in a credentials.py file in the root directory"
+    print ("Please specify a user name in the variable USERNAME in a "
+           "credentials.py file in the root directory")
+    sys.exit(1)
   if not credentials.PASS:
-    password = getpass.getpass("Password for wikipedia account %s: " % credentials.USERNAME)
+    password = getpass.getpass("Password for wikipedia account %s: "
+                               % credentials.USERNAME)
   else:
     password = credentials.PASS
 
@@ -50,17 +53,19 @@ def main():
     existing_page = wiki.does_page_exist(person.name())
     if existing_page:
       print "Page already exists at %s" % existing_page
+      continue
+    # Check for an existing draft page.
+    existing_draft = wiki.does_draft_exist(person.name())
+    if existing_draft:
+      print "Draft already exists at %s" % existing_draft
+      continue
+    print "Creating wikipedia page for %s (for %s)" % (
+      person.name(), person.office_and_district())
+    new_page = wiki.create_page(person, create_draft=True)
+    if new_page:
+      print "Created %s" % new_page
+      created += 1
     else:
-      # Check for an existing draft page.
-      existing_draft = wiki.does_draft_exist(person.name())
-      if existing_draft:
-        print "Draft already exists at %s" % existing_draft
-      else:
-        new_page = wiki.create_page(person)
-        if new_page:
-          print "Created %s" % new_page
-          created += 1
-        else:
-          print "Failed to create a page for %s" % person.name()
+      print "Failed to create a page for %s" % person.name()
 
 main()
