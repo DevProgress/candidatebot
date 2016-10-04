@@ -59,6 +59,8 @@ def main():
     if existing_draft:
       print "Draft already exists at %s" % existing_draft
       continue
+    print "Creating wikipedia page for %s (for %s)" % (
+      person.name(), person.office_and_district())
     new_page = wiki.create_page(person)
     if new_page:
       print "Created %s" % new_page

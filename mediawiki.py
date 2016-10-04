@@ -52,11 +52,16 @@ class Wiki(object):
   """Login credentials and methods for interacting with a mediawiki isntance."""
 
   def __init__(self, url, username, password, draft_prefix="Draft:"):
-    """Log in to the wiki."""
+    """Log in to the wiki.
+
+    Args:
+      url: (str) url of the wiki
+      username: login for the wiki
+      password: password for the wiki
+      draft_prefix: (str) How draft pages are named.
+    """
     self.url = url
     self.login_cookies = self.get_login_cookies(username, password)
-    if not self.login_cookies:
-      raise WikiException("Couldn't login to %s" % url)
     self.draft_prefix = draft_prefix
 
   def get_login_cookies(self, username, password):
@@ -109,13 +114,15 @@ class Wiki(object):
       page_to_query: (string) What to look up.
     Returns:
       (str) the page url if it exists; None otherwise.
+    Raises:
+      WikiException: Bad data from the wiki.
     """
     params = ('?format=json&action=query&titles=%s&prop=info&inprop=url' %
               page_to_query)
     req = requests.get(self.url + 'api.php' + params)
     if not req.ok:
-      print "Got status code %s from %s: %s"% (
-          req.status_code, req.url, req.reason)
+      raise WikiException("Got status code %s from %s: %s"% (
+                          req.status_code, req.url, req.reason))
 
     try:
       pages = req.json()['query']['pages']
@@ -123,7 +130,7 @@ class Wiki(object):
         if k != "-1":  # we have a live page!
           return pages[k]['fullurl']
     except ValueError, ex:
-      print "Couldn't parse JSON:", ex
+      raise WikiException("Couldn't parse JSON:", ex)
 
 
   def does_draft_exist(self, page_to_query):
@@ -139,36 +146,40 @@ class Wiki(object):
 
 
   @rate_limited(EDIT_PAGES_PER_SECOND)
-  def create_page(self, person):
+  def create_page(self, person, create_draft=False):
     """Create a page if it doesn't exist. If it already exists, just silently
        does nothing.
      Args:
       person: (candidate.Candidate) data about one candidate
+      create_draft: (bool) Whether to create a draft page using the
+                    |self.draft_prefix| variable.
      Returns:
-      (str) Url of created page or None if unsuccessful
+      (str) Url of page, whether newly created or already existing.
+    Raises:
+      WikiException: Couldn't create the page. The page already existing does
+        not raise an exception.
     """
-    page_to_edit = "%s%s" % (self.draft_prefix, person.name())
+    if create_draft:
+      page_to_edit = "%s%s" % (self.draft_prefix, person.name())
+    else:
+      page_to_edit = person.name()
 
     params = '?format=json&action=query&meta=tokens&continue='
     req = requests.get(self.url + 'api.php' + params,
                        cookies=self.login_cookies)
 
     if req.status_code != 200:
-      print "Got status code %s from %s: %s"% (
-          req.status_code, req.url, req.reason)
-      return None
+      raise WikiException("Got status code %s from %s: %s"% (
+          req.status_code, req.url, req.reason))
 
     try:
       edit_token = req.json()['query']['tokens']['csrftoken']
     except ValueError, ex:
-      print "Couldn't parse edit token from JSON:", ex
-      return None
+      raise WikiException("Couldn't parse edit token from JSON:", ex)
 
     edit_cookie = self.login_cookies.copy()
     edit_cookie.update(req.cookies)
 
-    print "Creating wikipedia page for %s (for %s)" % (
-        page_to_edit, person.office_and_district())
     content_to_write = person.wikipedia_content()
 
     payload = {'action': 'edit', 'assert': 'user', 'format': 'json', 'utf8': '',
@@ -177,20 +188,27 @@ class Wiki(object):
     req = requests.post(self.url + 'api.php', data=payload, cookies=edit_cookie)
 
     if not req.ok:
-      print "Got status code %s from %s: %s"% (
-              req.status_code, req.url, req.reason)
-      return None
+      raise WikiException("Got status code %s from %s: %s"% (
+              req.status_code, req.url, req.reason))
+
+    # I can't find this information anywhere except in the text /o\
+    if req.text.find('"result":"Failure"') > -1:
+      raise WikiException("Saw error in creation response: %s" % req.text)
 
     created_page = self.does_page_exist(page_to_edit)
-    if created_page:   # Add to the list of stubs we've created.
-      link = "[[%s/%s]]<br>" % (self.draft_prefix, person.name())
-      list_page = "%s%s" % (self.draft_prefix, "ListOfPages")
+    if not created_page:
+      raise WikiException("Wiki page wasn't created at %s, but there were no "
+                          "errors. " % page_to_edit)
 
-      payload = {'action': 'edit', 'assert': 'user', 'format': 'json',
-                 'utf8': '', 'appendtext': link,
-                 'summary': 'candidatebot did this', 'title': list_page,
-                 'token': edit_token}
-      req = requests.post(self.url + 'api.php', data=payload,
-                          cookies=edit_cookie)
+    # Add to the list of stubs we've created.
+    link = "[[%s]]<br>" % page_to_edit
+    list_page = "%s%s" % (self.draft_prefix, "CandidatebotListOfPages")
+
+    payload = {'action': 'edit', 'assert': 'user', 'format': 'json',
+               'utf8': '', 'appendtext': link,
+               'summary': 'candidatebot did this', 'title': list_page,
+               'token': edit_token}
+    req = requests.post(self.url + 'api.php', data=payload,
+                        cookies=edit_cookie)
 
     return created_page
