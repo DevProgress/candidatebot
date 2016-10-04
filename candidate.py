@@ -193,6 +193,12 @@ def normalize_location(state, district):
   full = us.states.lookup(unicode(unverified_state))
   if full:
     normalized_state = full.name
+  # https://github.com/unitedstates/python-us/issues/13. We can't guarantee that
+  # everyone will have jellyfish 0.5.3 or greater, so... hackorama.
+  elif unverified_state == "Utah":
+    normalized_state = "Utah"
+  else:
+    print "couldn't look up %s " % unicode(unverified_state)
 
   return (normalized_state, normalized_district)
 

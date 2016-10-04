@@ -102,7 +102,8 @@ class TestCandidate(unittest.TestCase):
       ["Iowa", "not real", "Iowa", ""],  # error
       ["", "", "", ""],                  # error
       ["Alberta", "", "", ""],           # error
-      ("XX", "Hawaii at-large", "Hawaii", "at-large"),
+      ["XX", "Hawaii at-large", "Hawaii", "at-large"],
+      ["", "Utah 1", "Utah", "1st"],
     ]
     for k in cases:
       got = candidate.normalize_location(k[0], k[1])
