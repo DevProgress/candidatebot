@@ -3,61 +3,12 @@ Wikipedia's Officeholder onebox.
 """
 
 import re
+import string
 import us
 import yaml
 
 from bs4 import BeautifulSoup
 from lxml import etree
-
-
-def check_field(field):
-  """Checks if a field is valid.
-
-  Args:
-    field: (string) A field name.
-  Returns:
-    (bool) Whether that's in the list of valid fields.
-  """
-  valid_fields = [  # this is not complete
-    "honorific-prefix",
-    "name",
-    "honorific-suffix",
-    "image",
-    "alt",
-    "state_assembly",
-    "district",
-    "term_start",
-    "term_end",
-    "predecessor",
-    "successor",
-    "speaker",
-    "term_start2",
-    "term_end2",
-    "predecessor2",
-    "successor2",
-    "birth_date",
-    "birth_place",
-    "death_date",
-    "death_place",
-    "nationality",
-    "office",
-    "spouse",
-    "party",
-    "relations",
-    "children",
-    "residence",
-    "alma_mater",
-    "occupation",
-    "profession",
-    "religion",
-    "signature",
-    "signature_alt",
-    "state",
-    "website",
-    "footnotes ",
-  ]
-
-  return field in valid_fields
 
 
 def normalize_field(field):
@@ -197,8 +148,6 @@ def normalize_location(state, district):
   # everyone will have jellyfish 0.5.3 or greater, so... hackorama.
   elif unverified_state == "Utah":
     normalized_state = "Utah"
-  else:
-    print "couldn't look up %s " % unicode(unverified_state)
 
   return (normalized_state, normalized_district)
 
@@ -264,24 +213,23 @@ def new_from_fec_xml(filename):
     yield candidate
 
 
-def new_from_wikipedia_page(filename):
-  """Read wikipedia's House Elections page and parse a list of candidates.
-
-    File downloaded from
-    https://en.wikipedia.org/wiki/United_States_House_of_Representatives_elections,_2016
+def new_from_wikipedia_page(filename, office):
+  """Read a wikipedia Elections page and parse a list of candidates.
 
     Args:
-      filename (string): a file with one or more candidates
+      filename: (str) a file with one or more candidates
+      office: (str) the name of the office to display (house|senate|governor)
     Yields:
       (Candidate): candidates.
   """
+  offices = ['house', 'senate', 'governor']
+  if office not in offices:
+    print "Warning: unexpected office, %s. Should be one of %s" % (office, offices)
 
   html = open(filename, 'r').read()
-
   other_parties = ["Green", "Independent", "Libertarian", "NPP", "PDP", "PIP",
                    "PPT", "R", "Reform", "Republican", "No Party Preference"]
   soup = BeautifulSoup(html, 'html.parser')
-
   citations = {}
   for ref_lists in soup.findAll("ol", {"class": "references"}):
     for ref in ref_lists.findAll("li"):
@@ -292,16 +240,37 @@ def new_from_wikipedia_page(filename):
   tables = soup.findAll("table", {"class": "wikitable sortable"})
 
   for table in tables:  # each state/territory
+    header_fields = []
     for row in table.findAll("tr"):  # each district
       headers = row.findAll("th")    # district name
       columns = row.findAll("td")    # election information
-      if len(headers) != 1 or len(columns) != 6:
-        # Not a table in the format we expect. That's fine; there'll be other
-        # stuff on the page.
+      extracted = {}
+      # Look for a top of table header with a "Candidates" column. Set headers
+      # and move on.
+      if len(columns) == 0:  # it's a top of table header:
+        header_fields = [x.text.replace("\n", " ").replace(" ", "_").lower() for x in headers]
+        if "candidates" not in header_fields:
+          header_fields = []
         continue
-      district = headers[0].text
-      incumbent = columns[1].text
-      candidates = columns[5]
+
+      # Don't do anything unless there are headers from a previous row.
+      if len(header_fields) == 0:
+        continue
+
+      if (len(columns) + len(headers)) != len(header_fields):
+        print "unexpected number of columns in %s: %s vs %s" % (row, len(columns), len(header_fields))
+        continue
+
+      # This is fragile: we assume headers come first.
+      extracted[header_fields[0]] = headers[0]
+      for i in range(0, len(columns)):
+        extracted[header_fields[i+1]] = columns[i]  # includes markup
+
+      try:
+        candidates = extracted["candidates"]
+      except KeyError:
+        print "No candidates column found! Headers are ", [x for x in data.keys()]
+        continue
       if candidates is None:
         print "Error: Unexpectedly empty candidates column for [%s]." % row
         continue
@@ -332,12 +301,6 @@ def new_from_wikipedia_page(filename):
         name = line.split("(")[0].strip()
         reference = line.split(")")[1].strip()
 
-        for i in range(0, len(tags)):
-          if tags[i].name == 'a' and tags[i].text == name:
-            page = tags[i]
-        if page:  # The candidate already has a page. We're not needed here.
-          continue
-
         # Extract the citation. This is a bit involved.
         # 1. We pull the reference number out from after the candidate name. It
         # looks like:  [63]
@@ -361,10 +324,11 @@ def new_from_wikipedia_page(filename):
 
         data = {}
         data["name"] = name
-        data["district"] = district
-        data["incumbent"] = incumbent
+        data["office"] = office
         data["party"] = "Democratic"
-        data["office"] = "house"
+        for k in extracted:
+          if k not in data:
+            data[k] = extracted[k].text
         if citation:
           data["reference_name"] = citation.text
           data["reference_url"] = citation.get('href')
@@ -373,7 +337,7 @@ def new_from_wikipedia_page(filename):
         try:
           candidate = make_candidate(data)
         except CandidateException, ex:
-          print "Skipping %s: %s" % (name, ex)
+          print "Skipping %s candidate %s: %s" % (office, name, ex)
           continue
         yield candidate
 
@@ -421,7 +385,7 @@ def make_candidate(noisy_data):
   state, district = normalize_location(state, district)
 
   if not state:
-    raise CandidateException("missing expected field: state")
+    raise CandidateException("missing expected field: state. Had %s" % data.keys())
   else:
     data['state'] = state
 
@@ -433,20 +397,30 @@ def make_candidate(noisy_data):
 
   return Candidate(name, data)
 
-
 class Candidate(object):
   """Name and a bunch of key/value pairs for a single candidate."""
   def __init__(self, name, data):
     self._name = name
     self._data = data
 
+  @staticmethod
+  def ordered_fields():
+    """Return an ordered list of the interesting fields."""
+    return [
+      "name",
+      "office",
+      "state",
+      "district",
+      "incumbent",
+      "representative",
+      "reference_name",
+      "reference_url",
+    ]
+
   def wikipedia_content(self):
     """Create a wikipedia-formatted string of candidate information."""
     infostr = "{{Infobox Officeholder\n"
     for k in self._data:
-      if not check_field(k):
-        # silently skip fields we don't know how to deal with.
-        continue
       infostr += "| %s = %s\n" % (k, self._data[k])
 
     infostr += ("\n}}\n'''%s''' is a 2016 Democratic candidate seeking "
@@ -478,6 +452,16 @@ class Candidate(object):
 
     return infostr
 
+  def as_list(self):
+    """Return information in an ordered list for CSVification."""
+    info = []
+    for field in self.ordered_fields():
+      try:
+        info.append(self._data[field].encode('utf-8'))
+      except KeyError:
+        info.append("")
+    return info
+
   def name(self):
     """Return the candidate's name."""
     return self._name
@@ -503,6 +487,8 @@ class Candidate(object):
       except KeyError:
         return "the US Senate"
       return "the US Senate for %s" % state
+    elif office == "governor":
+      return "Governor of %s" % self._data["state"]
     else:
       return office
 
