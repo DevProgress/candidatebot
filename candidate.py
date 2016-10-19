@@ -3,7 +3,6 @@ Wikipedia's Officeholder onebox.
 """
 
 import re
-import string
 import us
 import yaml
 
@@ -212,6 +211,68 @@ def new_from_fec_xml(filename):
       continue
     yield candidate
 
+def parse_candidates_column(candidates, citations):
+  """Munges the 'candidates' column of a wikipedia table.
+
+    Args:
+      candidates: (str) A bunch of html including candidate names, page links
+                  and citation references.
+      citations: {(str): (str), ...}
+    Returns:
+      (str, str): Candidate name, citation
+  """
+  other_parties = ["Green", "Independent", "Libertarian", "NPP", "PDP", "PIP",
+                   "PPT", "R", "Reform", "Republican", "No Party Preference"]
+  lines = candidates.text.split("\n")
+
+  name = ""
+  citation = ""
+  for line in lines:
+    # Skip empty lines.
+    if len(line) == 0:
+      continue
+    # Skip non-democrats, though warn if we can't see a party; this will
+    # help catch things in formats we don't expect.
+    if not "(Democrat" in line or "(D)" in line:
+      found = False
+      for party in other_parties:
+        if "(%s)" % party in line:
+          found = True
+          break
+      if not found:
+        print "Warning: [%s] has an unknown party." % line
+      continue
+
+    # Ok, we have a democratic candidate. Pull out the name and the
+    # wikipedia reference, then look for an <a href" link to an existing
+    # wikipedia page. The line will look like
+    # Firstname Lastname (Democrat)[reference]
+    name = line.split("(")[0].strip()
+    reference = line.split(")")[1].strip()
+
+    # Extract the citation. This is a bit involved.
+    # 1. We pull the reference number out from after the candidate name. It
+    # looks like:  [63]
+    # 2. We get the A record that matches that reference. It looks like:
+    #   <a href="#cite_note-68">[63]</a> The two numbers probably won't match,
+    # btw.
+    # 3. Strip the pound sign off the cite-note and look it up in the list
+    # of citations we created above. That gives us a name, like "Candidate
+    # Does A Thing, Says Newspaper!" and a url. We save them both for now,
+    # and combine them in a reference-ish way when we create the wiki page.
+    refs = candidates.findAll("a")
+    citation = None
+    for ref in refs:
+      if ref.text == reference:  # That's that '[63]' mentioned above.
+        href = ref.get('href')   # e.g., #cite_note-68
+        match = re.match("^#(.*)$", href)  # strip the leading '#'
+        if match is not None:
+          note = match.group(1)
+          if note in citations:
+            citation = citations[note]
+        break
+  return name, citation
+
 
 def new_from_wikipedia_page(filename, office):
   """Read a wikipedia Elections page and parse a list of candidates.
@@ -224,11 +285,13 @@ def new_from_wikipedia_page(filename, office):
   """
   offices = ['house', 'senate', 'governor']
   if office not in offices:
-    print "Warning: unexpected office, %s. Should be one of %s" % (office, offices)
+    print "Warning: unexpected office, %s. Should be one of %s" % (
+          office, offices)
 
   html = open(filename, 'r').read()
-  other_parties = ["Green", "Independent", "Libertarian", "NPP", "PDP", "PIP",
-                   "PPT", "R", "Reform", "Republican", "No Party Preference"]
+  # We don't care about these. 'first_elected' is when the incumbent was
+  # elected, so is misleading.
+  skip_fields = ["pvi", "candidates", "first_elected"]
   soup = BeautifulSoup(html, 'html.parser')
   citations = {}
   for ref_lists in soup.findAll("ol", {"class": "references"}):
@@ -248,7 +311,8 @@ def new_from_wikipedia_page(filename, office):
       # Look for a top of table header with a "Candidates" column. Set headers
       # and move on.
       if len(columns) == 0:  # it's a top of table header:
-        header_fields = [x.text.replace("\n", " ").replace(" ", "_").lower() for x in headers]
+        header_fields = [x.text.replace("\n", " ").replace(
+                         " ", "_").lower() for x in headers]
         if "candidates" not in header_fields:
           header_fields = []
         continue
@@ -258,7 +322,8 @@ def new_from_wikipedia_page(filename, office):
         continue
 
       if (len(columns) + len(headers)) != len(header_fields):
-        print "unexpected number of columns in %s: %s vs %s" % (row, len(columns), len(header_fields))
+        print ("unexpected number of columns in %s: %s vs %s" % (
+               row, len(columns), len(header_fields)))
         continue
 
       # This is fragile: we assume headers come first.
@@ -269,77 +334,36 @@ def new_from_wikipedia_page(filename, office):
       try:
         candidates = extracted["candidates"]
       except KeyError:
-        print "No candidates column found! Headers are ", [x for x in data.keys()]
+        print ("No candidates column found! Headers are ",
+               [x for x in extracted.keys()])
         continue
       if candidates is None:
         print "Error: Unexpectedly empty candidates column for [%s]." % row
         continue
-      lines = candidates.text.split("\n")
-      tags = candidates.findAll()
-      page = ""
 
-      for line in lines:
-        # Skip empty lines.
-        if len(line) == 0:
-          continue
-        # Skip non-democrats, though warn if we can't see a party; this will
-        # help catch things in formats we don't expect.
-        if not "(Democrat" in line or "(D)" in line:
-          found = False
-          for party in other_parties:
-            if "(%s)" % party in line:
-              found = True
-              break
-          if not found:
-            print "Warning: [%s] has an unknown party." % line
-          continue
+      name, citation = parse_candidates_column(candidates, citations)
+      if not name:
+        continue
 
-        # Ok, we have a democratic candidate. Pull out the name and the
-        # wikipedia reference, then look for an <a href" link to an existing
-        # wikipedia page. The line will look like
-        # Firstname Lastname (Democrat)[reference]
-        name = line.split("(")[0].strip()
-        reference = line.split(")")[1].strip()
+      data = {}
+      data["name"] = name
+      data["office"] = office
+      data["party"] = "Democratic"
 
-        # Extract the citation. This is a bit involved.
-        # 1. We pull the reference number out from after the candidate name. It
-        # looks like:  [63]
-        # 2. We get the A record that matches that reference. It looks like:
-        #   <a href="#cite_note-68">[63]</a> The two numbers won't match, btw.
-        # 3. Strip the pound sign off the cite-note and look it up in the list
-        # of citations we created above. That gives us a name, like "Candidate
-        # Does A Thing, Says Newspaper!" and a url. We save them both for now,
-        # and combine them in a reference-ish way when we create the wiki page.
-        refs = candidates.findAll("a")
-        citation = None
-        for ref in refs:
-          if ref.text == reference:  # That's that '[63]' mentioned above.
-            href = ref.get('href')   # e.g., #cite_note-68
-            match = re.match("^#(.*)$", href)  # strip the leading '#'
-            if match is not None:
-              note = match.group(1)
-              if note in citations:
-                citation = citations[note]
-            break
-
-        data = {}
-        data["name"] = name
-        data["office"] = office
-        data["party"] = "Democratic"
-        for k in extracted:
-          if k not in data:
-            data[k] = extracted[k].text
-        if citation:
-          data["reference_name"] = citation.text
-          data["reference_url"] = citation.get('href')
-        else:
-          print "No citation for %s" % name
-        try:
-          candidate = make_candidate(data)
-        except CandidateException, ex:
-          print "Skipping %s candidate %s: %s" % (office, name, ex)
-          continue
-        yield candidate
+      for k in extracted:
+        if k not in data and k not in skip_fields:
+          data[k] = extracted[k].text
+      if citation:
+        data["reference_name"] = citation.text
+        data["reference_url"] = citation.get('href')
+      else:
+        print "No citation for %s" % name
+      try:
+        candidate = make_candidate(data)
+      except CandidateException, ex:
+        print "Skipping %s candidate %s: %s" % (office, name, ex)
+        continue
+      yield candidate
 
 
 class CandidateException(Exception):
@@ -385,7 +409,8 @@ def make_candidate(noisy_data):
   state, district = normalize_location(state, district)
 
   if not state:
-    raise CandidateException("missing expected field: state. Had %s" % data.keys())
+    raise CandidateException("missing expected field: state. Had %s" %
+                             data.keys())
   else:
     data['state'] = state
 
@@ -469,28 +494,30 @@ class Candidate(object):
   def office_and_district(self):
     """Return the candidate's office."""
     office = self._data["office"]
+    formatted = ""
     if office == "house":
       try:
         district = self._data["district"]
         state = self._data["state"]
       except KeyError:
-        return "the US House of Representatives"
+        formatted = "the US House of Representatives"
       if district == "at-large":
-        return ("the US House of Representatives to represent the %s at-large "
-                "district" % state)
+        formatted = ("the US House of Representatives to represent the %s "
+                      "at-large district" % state)
       else:
-        return ("the US House of Representatives to represent the %s district "
-                "of %s" % (district, state))
+        formatted = ("the US House of Representatives to represent the %s "
+                     "district of %s" % (district, state))
     elif office == "senate":
       try:
         state = self._data["state"]
       except KeyError:
-        return "the US Senate"
-      return "the US Senate for %s" % state
+        formatted = "the US Senate"
+      formatted = "the US Senate for %s" % state
     elif office == "governor":
-      return "Governor of %s" % self._data["state"]
+      formatted = "Governor of %s" % self._data["state"]
     else:
-      return office
+      formatted = office
+    return formatted
 
   def office(self):
     """Return the office the candidate is running for."""

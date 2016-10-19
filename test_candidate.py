@@ -22,18 +22,6 @@ class TestCandidate(unittest.TestCase):
     for k in cases:
       self.assertEqual(candidate.normalize_name(k), cases[k])
 
-  def test_validity(self):
-    """Test checking fields for validity.
-
-    This is a kind of pointless test, but let's exercise the code.
-    """
-    cases = {
-      "office": True,
-      "icecream_flavor": False,
-    }
-    for k in cases:
-      self.assertEqual(candidate.check_field(k), cases[k])
-
   def test_candidate_creation(self):
     """Test candidate creation from a dictionary."""
     valid_cases = [
@@ -135,33 +123,36 @@ class TestCandidate(unittest.TestCase):
 
     filename = "test_house.html"
     got = []
-    for person in candidate.new_from_wikipedia_page(filename):
+    for person in candidate.new_from_wikipedia_page(filename, "house"):
       got.append(person.data())
 
     expected_data1 = {
+      "district": u"2nd",
       "name": u"Pageless One",
       "state": u"Alabama",
-      "district": u"2nd",
-      "incumbent": u"Name Two",
+      u"representative": u"Name Two",
       "reference_name": u'"Sen. Richard Shelby will face Republican challengers"',
       "reference_url": u"http://www.montgomeryadvertiser.com/story/news/2015/11/07/sen-richard-shelby-face-republican-challengers/75318814",
       "office": "house",
       "party": "Democratic",
+      u"status": u'Incumbent running',
+
     }
     expected_data2 = {
       "name": u"Pageless Two",
       "state": u"Alaska",
-      "district": u"at-large",
-      "incumbent": u"Name Five",
+      u"district": u"at-large",
+      u"representative": u"Name Five",
       "reference_name": u'"Steve Lindbeck announces run for Congress against Don Young"',
       "reference_url": u"http://www.adn.com/article/20160407/steve-lindbeck-announces-run-congress-against-don-young",
       "office": "house",
       "party": "Democratic",
+      u"status": u'Incumbent running',
     }
     expected = [
       expected_data1,
       expected_data2,
-   ]
+    ]
     self.assertEqual(got, expected)
 
 
