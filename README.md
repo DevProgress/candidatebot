@@ -1,23 +1,20 @@
 # candidatebot
 
-This project will help get basic candidate information that is programmatically retrieved and/or crowdsourced, added to wikipedia, and potentially other prominent sites online.
+# Status
+On hold. Wikipedia doesn't consider candidates for election to be automatically notable, and human-generated pages for candidates have been reverted; bot-created pages have low chance of survival. We could set up our own wiki, but the information is already available at Ballotopedia, Politics1, ActBlue, etc. This could be a data source for other projects; if a use case arises, we should repurpose this code to do whatever is needed.
 
 # What it does
-It reads data sources with information about candidates for election, and
-checks whether they have wikipedia pages. If not, it makes draft pages for
-them with placeholder information. It adds all created pages to a list so
-volunteers can fill in the gaps before sending the page for review.
+It reads data sources with information about candidates for election, saves them as CSV and optionally creates mediawiki (e.g., Wikipedia) stub pages for them using the https://en.wikipedia.org/wiki/Template:Infobox_officeholder infobox template.
 
-It can currently read yaml, the xml data dump from http://www.fec.gov/data/CandidateSummary.do and https://en.wikipedia.org/wiki/United_States_House_of_Representatives_elections,_2016
+It can currently read yaml, the xml data dump from http://www.fec.gov/data/CandidateSummary.do and some wikipedia pages, e.g., 
+https://en.wikipedia.org/wiki/United_States_House_of_Representatives_elections,_2016
 
-It uses the existing Officeholder infobox:
-https://en.wikipedia.org/wiki/Template:Infobox_officeholder
 
 # Prerequisites
 
 If you are running on a mac, make sure you have xcode command-line tools installed. You can install them using the command 'xcode-select --install'
 
-A couple of python modules:
+A few python modules:
 
 ```
 pip install pyyaml
