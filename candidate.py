@@ -3,7 +3,6 @@ Wikipedia's Officeholder onebox.
 """
 
 import re
-import string
 import us
 import yaml
 
@@ -226,6 +225,8 @@ def parse_candidates_column(candidates, citations):
                    "PPT", "R", "Reform", "Republican", "No Party Preference"]
   lines = candidates.text.split("\n")
 
+  name = ""
+  citation = ""
   for line in lines:
     # Skip empty lines.
     if len(line) == 0:
@@ -270,7 +271,7 @@ def parse_candidates_column(candidates, citations):
           if note in citations:
             citation = citations[note]
         break
-    return name, citation
+  return name, citation
 
 
 def new_from_wikipedia_page(filename, office):
@@ -284,7 +285,8 @@ def new_from_wikipedia_page(filename, office):
   """
   offices = ['house', 'senate', 'governor']
   if office not in offices:
-    print "Warning: unexpected office, %s. Should be one of %s" % (office, offices)
+    print "Warning: unexpected office, %s. Should be one of %s" % (
+          office, offices)
 
   html = open(filename, 'r').read()
   # We don't care about these. 'first_elected' is when the incumbent was
@@ -309,7 +311,8 @@ def new_from_wikipedia_page(filename, office):
       # Look for a top of table header with a "Candidates" column. Set headers
       # and move on.
       if len(columns) == 0:  # it's a top of table header:
-        header_fields = [x.text.replace("\n", " ").replace(" ", "_").lower() for x in headers]
+        header_fields = [x.text.replace("\n", " ").replace(
+                         " ", "_").lower() for x in headers]
         if "candidates" not in header_fields:
           header_fields = []
         continue
@@ -319,7 +322,8 @@ def new_from_wikipedia_page(filename, office):
         continue
 
       if (len(columns) + len(headers)) != len(header_fields):
-        print "unexpected number of columns in %s: %s vs %s" % (row, len(columns), len(header_fields))
+        print ("unexpected number of columns in %s: %s vs %s" % (
+               row, len(columns), len(header_fields)))
         continue
 
       # This is fragile: we assume headers come first.
@@ -330,7 +334,8 @@ def new_from_wikipedia_page(filename, office):
       try:
         candidates = extracted["candidates"]
       except KeyError:
-        print "No candidates column found! Headers are ", [x for x in extracted.keys()]
+        print ("No candidates column found! Headers are ",
+               [x for x in extracted.keys()])
         continue
       if candidates is None:
         print "Error: Unexpectedly empty candidates column for [%s]." % row
@@ -404,7 +409,8 @@ def make_candidate(noisy_data):
   state, district = normalize_location(state, district)
 
   if not state:
-    raise CandidateException("missing expected field: state. Had %s" % data.keys())
+    raise CandidateException("missing expected field: state. Had %s" %
+                             data.keys())
   else:
     data['state'] = state
 
@@ -488,28 +494,30 @@ class Candidate(object):
   def office_and_district(self):
     """Return the candidate's office."""
     office = self._data["office"]
+    formatted = ""
     if office == "house":
       try:
         district = self._data["district"]
         state = self._data["state"]
       except KeyError:
-        return "the US House of Representatives"
+        formatted = "the US House of Representatives"
       if district == "at-large":
-        return ("the US House of Representatives to represent the %s at-large "
-                "district" % state)
+        formatted = ("the US House of Representatives to represent the %s "
+                      "at-large district" % state)
       else:
-        return ("the US House of Representatives to represent the %s district "
-                "of %s" % (district, state))
+        formatted = ("the US House of Representatives to represent the %s "
+                     "district of %s" % (district, state))
     elif office == "senate":
       try:
         state = self._data["state"]
       except KeyError:
-        return "the US Senate"
-      return "the US Senate for %s" % state
+        formatted = "the US Senate"
+      formatted = "the US Senate for %s" % state
     elif office == "governor":
-      return "Governor of %s" % self._data["state"]
+      formatted = "Governor of %s" % self._data["state"]
     else:
-      return office
+      formatted = office
+    return formatted
 
   def office(self):
     """Return the office the candidate is running for."""

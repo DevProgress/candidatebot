@@ -52,14 +52,13 @@ def main():
   writer = csv.writer(csvfile, quoting=csv.QUOTE_ALL)
   writer.writerow(candidate.Candidate.ordered_fields())
 
-  files = [ # (HOUSE_FILE, "house"),
-            (GOVERNOR_FILE, "governor")]
+  files = [(HOUSE_FILE, "house"),
+           (GOVERNOR_FILE, "governor")]
 
   print "Creating no more than %s wiki pages." % MAX_PAGES_TO_CREATE
   for filename, office in files:
     print "### %s" % filename
-    #for person in candidate.new_from_fec_xml(XML_FILE):
-    #for person in candidate.new_from_yaml(YAML_FILE):
+    # candidate.py also contains methods to parse yaml or XML.
     for person in candidate.new_from_wikipedia_page(filename, office):
       writer.writerow(person.as_list())
       if created == MAX_PAGES_TO_CREATE:
